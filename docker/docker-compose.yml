@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  arxiv-mcp-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: arxiv-mcp-server
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      # Persist storage and logs
+      - arxiv-storage:/app/storage
+      - arxiv-logs:/app/logs
+      # Optional: Mount custom prompts
+      - ./custom-prompts:/app/prompts:ro
+    stdin_open: true
+    tty: true
+    networks:
+      - mcp-network
+
+volumes:
+  arxiv-storage:
+    driver: local
+  arxiv-logs:
+    driver: local
+
+networks:
+  mcp-network:
+    driver: bridge

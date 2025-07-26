@@ -1,30 +1,64 @@
 {
-  "name": "arxiv-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server for accessing arXiv API - search and retrieve scientific papers",
+  "name": "@arxiv/mcp-server",
+  "version": "1.1.0",
+  "description": "Enhanced MCP server for arXiv - search, download, read, and analyze scientific papers with AI-powered research prompts",
   "main": "build/index.js",
   "type": "module",
+  "bin": {
+    "arxiv-mcp-server": "./start.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
-    "dev": "tsc && node build/index.js"
+    "dev": "tsc && node build/index.js",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "mcp",
     "arxiv",
     "research",
     "papers",
-    "api"
+    "api",
+    "pdf",
+    "analysis",
+    "ai",
+    "scientific-papers",
+    "model-context-protocol"
   ],
-  "author": "",
+  "author": "MaksPyn",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MaksPyn/arxiv-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MaksPyn/arxiv-mcp-server/issues"
+  },
+  "homepage": "https://github.com/MaksPyn/arxiv-mcp-server#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "build/",
+    "prompts/",
+    "start.js",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "axios": "^1.7.0",
+    "dotenv": "^17.2.1",
+    "node-fetch": "^2.7.0",
+    "pdf-parse": "^1.1.1",
+    "winston": "^3.17.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/node-fetch": "^2.6.12",
+    "@types/pdf-parse": "^1.1.5",
     "@types/xml2js": "^0.4.14",
     "typescript": "^5.0.0"
   }

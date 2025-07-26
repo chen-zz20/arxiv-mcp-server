@@ -1,0 +1,86 @@
+{
+  "summary": {
+    "id": "summary",
+    "name": "Paper Summary",
+    "description": "Generate a comprehensive summary of the paper",
+    "template": "Please provide a comprehensive summary of the following paper:\n\nTitle: {{title}}\nAuthors: {{authors}}\nAbstract: {{abstract}}\n\nPlease include:\n1. Main research question or problem addressed\n2. Key methodology used\n3. Principal findings and results\n4. Main contributions to the field\n5. Limitations and future work suggested\n\nKeep the summary concise but informative, suitable for someone who wants to quickly understand the paper's essence.",
+    "variables": [
+      "title",
+      "authors",
+      "abstract"
+    ]
+  },
+  "key_findings": {
+    "id": "key_findings",
+    "name": "Key Findings Extraction",
+    "description": "Extract and highlight the key findings from the paper",
+    "template": "Based on this paper:\n\nTitle: {{title}}\nAbstract: {{abstract}}\n\nPlease extract and list:\n1. The 3-5 most important findings or results\n2. For each finding, explain its significance\n3. Any surprising or counterintuitive results\n4. How these findings advance the current state of knowledge\n\nFormat as bullet points for easy reading.",
+    "variables": [
+      "title",
+      "abstract"
+    ]
+  },
+  "methodology_analysis": {
+    "id": "methodology_analysis",
+    "name": "Methodology Analysis",
+    "description": "Analyze the research methodology used in the paper",
+    "template": "Analyze the methodology of this research paper:\n\nTitle: {{title}}\nAbstract: {{abstract}}\n\nPlease provide:\n1. Research design and approach (experimental, theoretical, computational, etc.)\n2. Data collection methods (if applicable)\n3. Analysis techniques used\n4. Strengths of the methodology\n5. Potential limitations or biases\n6. How the methodology compares to standard practices in the field\n\nBe specific and critical in your analysis.",
+    "variables": [
+      "title",
+      "abstract"
+    ]
+  },
+  "literature_review": {
+    "id": "literature_review",
+    "name": "Literature Review Helper",
+    "description": "Help create a literature review entry for this paper",
+    "template": "Create a literature review entry for:\n\nTitle: {{title}}\nAuthors: {{authors}}\nYear: {{year}}\nAbstract: {{abstract}}\n\nPlease provide:\n1. A one-paragraph summary suitable for a literature review\n2. Key concepts and theories introduced or used\n3. How this work relates to and builds upon previous research\n4. The gap in knowledge this paper addresses\n5. Suggested citation format (APA style)\n\nMake it suitable for inclusion in an academic literature review section.",
+    "variables": [
+      "title",
+      "authors",
+      "year",
+      "abstract"
+    ]
+  },
+  "research_gaps": {
+    "id": "research_gaps",
+    "name": "Research Gap Identifier",
+    "description": "Identify research gaps and future directions suggested by the paper",
+    "template": "Identify research gaps from this paper:\n\nTitle: {{title}}\nAbstract: {{abstract}}\n\nPlease analyze and list:\n1. Explicitly mentioned limitations of the current work\n2. Future research directions suggested by the authors\n3. Implicit gaps that could be addressed\n4. Potential follow-up studies or experiments\n5. Interdisciplinary opportunities this work opens up\n\nFormat as actionable research questions or project ideas.",
+    "variables": [
+      "title",
+      "abstract"
+    ]
+  },
+  "technical_deep_dive": {
+    "id": "technical_deep_dive",
+    "name": "Technical Deep Dive",
+    "description": "Provide a detailed technical analysis of the paper",
+    "template": "Provide a technical deep dive for:\n\nTitle: {{title}}\nCategories: {{categories}}\nAbstract: {{abstract}}\n\nPlease analyze:\n1. Core algorithms or techniques used (with complexity analysis if applicable)\n2. Mathematical foundations and key equations\n3. Implementation details mentioned\n4. Experimental setup and parameters\n5. Performance metrics and benchmarks\n6. Reproducibility - what would be needed to replicate this work?\n\nBe as technical and specific as possible.",
+    "variables": [
+      "title",
+      "categories",
+      "abstract"
+    ]
+  },
+  "comparison": {
+    "id": "comparison",
+    "name": "Comparative Analysis",
+    "description": "Compare this paper with related work",
+    "template": "Perform a comparative analysis:\n\nTitle: {{title}}\nAbstract: {{abstract}}\n\nPlease:\n1. Identify 3-5 closely related papers or approaches (based on the abstract)\n2. Compare the methodology with these related works\n3. Highlight what makes this approach unique or novel\n4. Discuss advantages and disadvantages compared to alternatives\n5. Assess the significance of improvements claimed\n\nProvide a balanced, objective comparison.",
+    "variables": [
+      "title",
+      "abstract"
+    ]
+  },
+  "practical_applications": {
+    "id": "practical_applications",
+    "name": "Practical Applications",
+    "description": "Identify practical applications and real-world impact",
+    "template": "Analyze practical applications for:\n\nTitle: {{title}}\nAbstract: {{abstract}}\n\nPlease identify:\n1. Direct practical applications of this research\n2. Industries or domains that could benefit\n3. Potential products or services that could emerge\n4. Timeline for practical implementation (near-term vs long-term)\n5. Barriers to practical adoption\n6. Societal impact (positive and potential negative)\n\nBe specific and realistic in your assessment.",
+    "variables": [
+      "title",
+      "abstract"
+    ]
+  }
+}

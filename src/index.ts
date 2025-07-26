@@ -9,31 +9,25 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+// Import types
+import { ArxivEntry, SearchResult } from './types/index.js';
+
+// Import utilities
+import logger from './utils/logger.js';
+import { NetworkError, ValidationError, retryWithBackoff } from './utils/errors.js';
+
+// Import managers
+import { storageManager } from './storage/storageManager.js';
+import { promptManager } from './prompts/promptManager.js';
+import { pdfReader } from './utils/pdfReader.js';
 
 const ARXIV_API_BASE = 'http://export.arxiv.org/api/query';
 const RATE_LIMIT_DELAY = 3000; // 3 seconds as recommended by arXiv
-
-interface ArxivEntry {
-  id: string;
-  updated: string;
-  published: string;
-  title: string;
-  summary: string;
-  authors: Array<{ name: string; affiliation?: string }>;
-  categories: string[];
-  primaryCategory: string;
-  links: Array<{ href: string; type?: string; title?: string }>;
-  comment?: string;
-  journalRef?: string;
-  doi?: string;
-}
-
-interface SearchResult {
-  totalResults: number;
-  startIndex: number;
-  itemsPerPage: number;
-  entries: ArxivEntry[];
-}
 
 class ArxivServer {
   private server: Server;
@@ -53,13 +47,24 @@ class ArxivServer {
     );
 
     this.setupToolHandlers();
+    this.initializeManagers();
     
     // Error handling
-    this.server.onerror = (error) => console.error('[MCP Error]', error);
+    this.server.onerror = (error) => logger.error('[MCP Error]', error);
     process.on('SIGINT', async () => {
       await this.server.close();
       process.exit(0);
     });
+  }
+
+  private async initializeManagers() {
+    try {
+      await storageManager.initialize();
+      await promptManager.initialize();
+      logger.info('Managers initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize managers:', error);
+    }
   }
 
   private async enforceRateLimit() {
@@ -246,6 +251,113 @@ class ArxivServer {
             required: ['author'],
           },
         },
+        {
+          name: 'download_paper',
+          description: 'Download a paper PDF and store it locally',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              arxivId: {
+                type: 'string',
+                description: 'arXiv ID of the paper to download',
+              },
+            },
+            required: ['arxivId'],
+          },
+        },
+        {
+          name: 'list_downloaded_papers',
+          description: 'List all locally downloaded papers',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'delete_paper',
+          description: 'Delete a downloaded paper from local storage',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              arxivId: {
+                type: 'string',
+                description: 'arXiv ID of the paper to delete',
+              },
+            },
+            required: ['arxivId'],
+          },
+        },
+        {
+          name: 'get_storage_stats',
+          description: 'Get storage statistics for downloaded papers',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'read_paper_content',
+          description: 'Read and extract text content from a downloaded paper',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              arxivId: {
+                type: 'string',
+                description: 'arXiv ID of the paper to read',
+              },
+            },
+            required: ['arxivId'],
+          },
+        },
+        {
+          name: 'search_in_paper',
+          description: 'Search for text within a downloaded paper',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              arxivId: {
+                type: 'string',
+                description: 'arXiv ID of the paper to search in',
+              },
+              searchTerm: {
+                type: 'string',
+                description: 'Text to search for',
+              },
+              caseSensitive: {
+                type: 'boolean',
+                description: 'Whether the search should be case sensitive',
+                default: false,
+              },
+            },
+            required: ['arxivId', 'searchTerm'],
+          },
+        },
+        {
+          name: 'get_analysis_prompts',
+          description: 'Get available research analysis prompts',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'analyze_paper',
+          description: 'Generate an analysis prompt for a paper',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              arxivId: {
+                type: 'string',
+                description: 'arXiv ID of the paper to analyze',
+              },
+              promptId: {
+                type: 'string',
+                description: 'ID of the analysis prompt to use',
+              },
+            },
+            required: ['arxivId', 'promptId'],
+          },
+        },
       ],
     }));
 
@@ -262,6 +374,22 @@ class ArxivServer {
             return await this.getRecentPapers(args);
           case 'search_author':
             return await this.searchAuthor(args);
+          case 'download_paper':
+            return await this.downloadPaper(args);
+          case 'list_downloaded_papers':
+            return await this.listDownloadedPapers();
+          case 'delete_paper':
+            return await this.deletePaper(args);
+          case 'get_storage_stats':
+            return await this.getStorageStats();
+          case 'read_paper_content':
+            return await this.readPaperContent(args);
+          case 'search_in_paper':
+            return await this.searchInPaper(args);
+          case 'get_analysis_prompts':
+            return await this.getAnalysisPrompts();
+          case 'analyze_paper':
+            return await this.analyzePaper(args);
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -435,10 +563,236 @@ class ArxivServer {
     };
   }
 
+  private async downloadPaper(args: any) {
+    if (!args.arxivId) {
+      throw new ValidationError('arxivId is required');
+    }
+
+    // First get the paper details
+    const paperResult = await this.getPaperById({ ids: [args.arxivId] });
+    const papers = JSON.parse(paperResult.content[0].text).papers;
+    
+    if (papers.length === 0) {
+      throw new ValidationError(`Paper with ID ${args.arxivId} not found`);
+    }
+
+    const paper = papers[0];
+    const pdfLink = paper.links.find((l: any) => l.type === 'application/pdf');
+    
+    if (!pdfLink) {
+      throw new ValidationError(`No PDF link found for paper ${args.arxivId}`);
+    }
+
+    const downloadedPaper = await storageManager.downloadPaper(
+      args.arxivId,
+      pdfLink.href,
+      {
+        title: paper.title,
+        authors: paper.authors.map((a: any) => a.name),
+        categories: paper.categories,
+        abstract: paper.summary
+      }
+    );
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            message: 'Paper downloaded successfully',
+            paper: downloadedPaper
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async listDownloadedPapers() {
+    const papers = await storageManager.listDownloadedPapers();
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            totalPapers: papers.length,
+            papers: papers.map(p => ({
+              id: p.id,
+              title: p.title,
+              authors: p.authors,
+              downloadDate: p.downloadDate,
+              fileSize: p.fileSize,
+              categories: p.categories
+            }))
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async deletePaper(args: any) {
+    if (!args.arxivId) {
+      throw new ValidationError('arxivId is required');
+    }
+
+    const deleted = await storageManager.deletePaper(args.arxivId);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: deleted,
+            message: deleted ? `Paper ${args.arxivId} deleted successfully` : `Paper ${args.arxivId} not found`
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getStorageStats() {
+    const stats = await storageManager.getStorageStats();
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(stats, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async readPaperContent(args: any) {
+    if (!args.arxivId) {
+      throw new ValidationError('arxivId is required');
+    }
+
+    const papers = await storageManager.listDownloadedPapers();
+    const paper = papers.find(p => p.id === args.arxivId);
+    
+    if (!paper) {
+      throw new ValidationError(`Paper ${args.arxivId} not found in local storage. Please download it first.`);
+    }
+
+    const content = await pdfReader.readPaperContent(paper.filePath, paper.id, paper.title);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            id: content.id,
+            title: content.title,
+            sections: content.sections,
+            fullTextLength: content.fullText.length
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async searchInPaper(args: any) {
+    if (!args.arxivId || !args.searchTerm) {
+      throw new ValidationError('arxivId and searchTerm are required');
+    }
+
+    const papers = await storageManager.listDownloadedPapers();
+    const paper = papers.find(p => p.id === args.arxivId);
+    
+    if (!paper) {
+      throw new ValidationError(`Paper ${args.arxivId} not found in local storage. Please download it first.`);
+    }
+
+    const content = await pdfReader.readPaperContent(paper.filePath, paper.id, paper.title);
+    const searchResults = pdfReader.searchInPaper(content, args.searchTerm, args.caseSensitive || false);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            paperId: args.arxivId,
+            searchTerm: args.searchTerm,
+            totalMatches: searchResults.reduce((sum, r) => sum + r.matches.length, 0),
+            results: searchResults
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getAnalysisPrompts() {
+    const prompts = promptManager.getAllPrompts();
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            totalPrompts: prompts.length,
+            prompts: prompts.map(p => ({
+              id: p.id,
+              name: p.name,
+              description: p.description,
+              variables: p.variables
+            }))
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async analyzePaper(args: any) {
+    if (!args.arxivId || !args.promptId) {
+      throw new ValidationError('arxivId and promptId are required');
+    }
+
+    // Get paper details
+    const paperResult = await this.getPaperById({ ids: [args.arxivId] });
+    const papers = JSON.parse(paperResult.content[0].text).papers;
+    
+    if (papers.length === 0) {
+      throw new ValidationError(`Paper with ID ${args.arxivId} not found`);
+    }
+
+    const paper = papers[0];
+    const prompt = promptManager.getPrompt(args.promptId);
+    
+    if (!prompt) {
+      throw new ValidationError(`Prompt with ID ${args.promptId} not found`);
+    }
+
+    // Prepare variables for the prompt
+    const variables: Record<string, string> = {
+      title: paper.title,
+      authors: paper.authors.map((a: any) => a.name).join(', '),
+      abstract: paper.summary,
+      categories: paper.categories.join(', '),
+      year: new Date(paper.published).getFullYear().toString()
+    };
+
+    const filledPrompt = promptManager.applyPromptTemplate(prompt, variables);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            paperId: args.arxivId,
+            promptId: args.promptId,
+            promptName: prompt.name,
+            filledPrompt: filledPrompt
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('arXiv MCP server running on stdio');
+    logger.info('arXiv MCP server running on stdio');
   }
 }
 
